@@ -91,10 +91,14 @@ app.MapPost("/api/token", (string? username, string? password) =>
         var tokenOptions = new JwtSecurityToken(
             issuer: "your_issuer",
             audience: "your_audience",
-            claims: new List<Claim>(),
+            claims: new List<Claim> {
+                new Claim(ClaimTypes.Name, username),
+                new Claim("company", "your_company")
+            },
             expires: DateTime.Now.AddMinutes(5),
             signingCredentials: signinCredentials
         );
+
 
         var tokenString = new JwtSecurityTokenHandler().WriteToken(tokenOptions);
         return Results.Ok($"Bearer {tokenString}");
@@ -108,7 +112,10 @@ app.MapPost("/api/token", (string? username, string? password) =>
 //Web API:Authorize
 app.MapGet("/api/authorize", (ClaimsPrincipal user) =>
 {
-    return Results.Ok("Authorized");
+    var username = user.Identity?.Name;
+    var company = user.Claims.FirstOrDefault(c => c.Type == "company")?.Value;
+
+    return Results.Ok($"Hello {username}, Company: {company}");
 }).RequireAuthorization();
 
 
