@@ -1,11 +1,19 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+嚜簑sing Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileSystemGlobbing.Internal.PatternContexts;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
+using Net8.JWTTest.Data;
+using Net8.JWTTest;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddDbContext<Net8JWTTestContext>(options =>
+    options.UseInMemoryDatabase("Net8JWTTest")
+    );
 
 var key = "dh9h3297c8bvwcc9je0j01jcm0eaposc$@@q0io9kw0-1";
 
@@ -14,6 +22,7 @@ var key = "dh9h3297c8bvwcc9je0j01jcm0eaposc$@@q0io9kw0-1";
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddAuthorization();
+
 
 // Add JWT authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -31,12 +40,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-
 builder.Services.AddSwaggerGen(c =>
 {
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = $"可用 /api/app/login 登入已取得access_token",
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.ApiKey,
@@ -74,16 +81,40 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
+//Add Init User
+app.MapPost("/api/init", (Net8JWTTestContext db) =>
+{
+    db.User.Add(new User
+    {
+        Id = 1,
+        Name = "admin",
+        Password = "admin",
+    });
+
+    db.User.Add(new User
+    {
+        Id = 2,
+        Name = "user",
+        Password = "user",
+    });
+
+    db.SaveChanges();
+
+    return Results.Ok("Init User Success");
+});
 
 //Web API:Generate JWT Token
-app.MapPost("/api/token", (string? username, string? password) =>
+app.MapPost("/api/token", (Net8JWTTestContext db, string? username, string? password) =>
 {
 #if DEBUG
     username = "admin";
     password = "admin";
 #endif
 
-    if (username == "admin" && password == "admin")
+    //JwtTestContext
+    var exist = db.User.Any(u => u.Name == username);
+
+    if (exist)
     {
         var secretKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
         var signinCredentials = new SigningCredentials(secretKey, SecurityAlgorithms.HmacSha256);
@@ -118,6 +149,13 @@ app.MapGet("/api/authorize", (ClaimsPrincipal user) =>
     return Results.Ok($"Hello {username}, Company: {company}");
 }).RequireAuthorization();
 
-
 app.Run();
+
+//user class
+public class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Password { get; set; }
+}
 
